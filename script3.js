@@ -541,3 +541,232 @@ document.addEventListener("pointermove", e => {
 })();
 
 })();
+
+
+
+
+(() => {
+    if (document.querySelector("#visual-meltdown")) return;
+
+    const css = document.createElement("style");
+    css.id = "visual-meltdown";
+    css.textContent = `
+        #vm-canvas {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 999999;
+            mix-blend-mode: screen;
+        }
+
+        #vm-layer {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 999998;
+            overflow: hidden;
+            background:
+                repeating-linear-gradient(
+                    0deg,
+                    transparent 0px,
+                    #ffffff08 2px,
+                    transparent 4px
+                );
+            animation: vmScan 0.7s linear infinite;
+        }
+
+        #vm-color {
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            z-index: 999997;
+            background: conic-gradient(
+                from 0deg at 50% 50%,
+                #ff00ff22,
+                #00ffff22,
+                #ffff0022,
+                #ff000022,
+                #7b00ff22,
+                #ff00ff22
+            );
+            mix-blend-mode: screen;
+            animation: vmRotate 9s linear infinite;
+        }
+
+        @keyframes vmScan {
+            from { background-position: 0 0; }
+            to { background-position: 0 100px; }
+        }
+
+        @keyframes vmRotate {
+            to { transform: rotate(360deg) scale(1.5); }
+        }
+
+        .card {
+            animation: vmCards 2s ease-in-out infinite alternate !important;
+        }
+
+        @keyframes vmCards {
+            0% {
+                box-shadow: 0 0 10px #00ffff77, inset 0 0 20px #ff00ff22;
+                border-color: #00ffff !important;
+            }
+            50% {
+                box-shadow: 0 0 35px #ff00ff99, inset 0 0 30px #00ffcc33;
+                border-color: #ff00ff !important;
+            }
+            100% {
+                box-shadow: 0 0 25px #ffff0088, inset 0 0 25px #7000ff44;
+                border-color: #ffff00 !important;
+            }
+        }
+
+        h1, h2, h3 {
+            animation: vmText 1.8s ease-in-out infinite alternate !important;
+        }
+
+        @keyframes vmText {
+            from {
+                text-shadow: -3px 0 #ff00ff, 3px 0 #00ffff,
+                             0 0 15px #ff00ff;
+                filter: hue-rotate(0deg);
+            }
+            to {
+                text-shadow: 3px 0 #00ffff, -3px 0 #ffff00,
+                             0 0 35px #00ffff;
+                filter: hue-rotate(120deg);
+            }
+        }
+    `;
+    document.head.appendChild(css);
+
+    const canvas = document.createElement("canvas");
+    canvas.id = "vm-canvas";
+    document.body.appendChild(canvas);
+
+    const layer = document.createElement("div");
+    layer.id = "vm-layer";
+    document.body.appendChild(layer);
+
+    const colors = document.createElement("div");
+    colors.id = "vm-color";
+    document.body.appendChild(colors);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let w = 0;
+    let h = 0;
+    let t = 0;
+    let particles = [];
+    let streaks = [];
+
+    function resize() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        w = innerWidth;
+        h = innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
+
+    function burst() {
+        const x = Math.random() * w;
+        const y = Math.random() * h;
+
+        for (let i = 0; i < 35; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = Math.random() * 12 + 2;
+
+            particles.push({
+                x, y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed,
+                life: 1,
+                hue: Math.random() * 360,
+                size: Math.random() * 5 + 1
+            });
+        }
+
+        if (particles.length > 800) {
+            particles.splice(0, particles.length - 800);
+        }
+    }
+
+    function streak() {
+        streaks.push({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            length: Math.random() * 250 + 50,
+            angle: Math.random() * Math.PI * 2,
+            hue: Math.random() * 360,
+            life: 1
+        });
+
+        if (streaks.length > 100) streaks.shift();
+    }
+
+    function render() {
+        t++;
+        ctx.clearRect(0, 0, w, h);
+
+        if (t % 5 === 0) burst();
+        if (t % 3 === 0) streak();
+
+        for (let i = particles.length - 1; i >= 0; i--) {
+            const p = particles[i];
+            p.x += p.vx;
+            p.y += p.vy;
+            p.vx *= .97;
+            p.vy *= .97;
+            p.life -= .018;
+
+            if (p.life <= 0) {
+                particles.splice(i, 1);
+                continue;
+            }
+
+            ctx.globalAlpha = p.life;
+            ctx.fillStyle = `hsl(${(p.hue + t * 2) % 360} 100% 65%)`;
+            ctx.shadowBlur = 20;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.size * p.life, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        for (let i = streaks.length - 1; i >= 0; i--) {
+            const s = streaks[i];
+            s.life -= .012;
+
+            if (s.life <= 0) {
+                streaks.splice(i, 1);
+                continue;
+            }
+
+            const x2 = s.x + Math.cos(s.angle) * s.length;
+            const y2 = s.y + Math.sin(s.angle) * s.length;
+
+            ctx.globalAlpha = s.life * .7;
+            ctx.strokeStyle = `hsl(${(s.hue + t * 3) % 360} 100% 65%)`;
+            ctx.lineWidth = Math.random() * 4 + 1;
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = ctx.strokeStyle;
+            ctx.beginPath();
+            ctx.moveTo(s.x, s.y);
+            ctx.lineTo(x2, y2);
+            ctx.stroke();
+        }
+
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+
+        requestAnimationFrame(render);
+    }
+
+    resize();
+    window.addEventListener("resize", resize);
+    render();
+})();
