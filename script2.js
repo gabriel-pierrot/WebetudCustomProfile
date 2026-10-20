@@ -114,3 +114,225 @@ document.addEventListener("pointermove", e => {
     document.body.appendChild(d);
     setTimeout(() => d.remove(), 250);
 });
+
+
+(() => {
+    document.querySelector("#fx-continuous")?.remove();
+
+    const style = document.createElement("style");
+    style.id = "fx-continuous";
+    style.textContent = `
+        #fx-continuous {
+            position: fixed;
+            inset: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 99998;
+        }
+
+        #fx-screen-flash {
+            position: fixed;
+            inset: 0;
+            z-index: 99997;
+            pointer-events: none;
+            opacity: 0;
+            background: white;
+        }
+
+        .fx-auto-laser {
+            position: fixed;
+            left: -120%;
+            width: 100%;
+            height: 2px;
+            pointer-events: none;
+            z-index: 99996;
+            background: linear-gradient(90deg, transparent, #00ffff, white, #bd5bff, transparent);
+            box-shadow: 0 0 12px #00ffff, 0 0 30px #bd5bff;
+            animation: fxLaserPass 1.3s linear forwards;
+        }
+
+        @keyframes fxLaserPass {
+            0% { left: -120%; opacity: 0; }
+            15% { opacity: 1; }
+            85% { opacity: .8; }
+            100% { left: 120%; opacity: 0; }
+        }
+
+        @keyframes fxAmbientFlash {
+            0%, 100% { opacity: 0; }
+            3% { opacity: .65; }
+            5% { opacity: .04; }
+            7% { opacity: .3; }
+            10% { opacity: 0; }
+        }
+
+        .card, #nav-drawer {
+            animation: fxCardGlow 4s ease-in-out infinite alternate;
+        }
+
+        @keyframes fxCardGlow {
+            from { box-shadow: 0 0 8px #00eaff22, inset 0 0 8px #a000ff11; }
+            to { box-shadow: 0 0 22px #00eaff66, inset 0 0 15px #a000ff33; }
+        }
+
+        h1, h2, h3 {
+            animation: fxTextGlow 2.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes fxTextGlow {
+            from { text-shadow: 0 0 5px #00ffff, 0 0 12px #00ffff; }
+            to { text-shadow: 0 0 10px #fff, 0 0 25px #bd5bff, 0 0 45px #00ffff; }
+        }
+
+        @media (prefers-reduced-motion: reduce) {
+            .fx-auto-laser, .card, #nav-drawer, h1, h2, h3 {
+                animation-duration: 8s !important;
+            }
+        }
+    `;
+    document.head.appendChild(style);
+
+    const canvas = document.createElement("canvas");
+    canvas.id = "fx-continuous";
+    document.body.appendChild(canvas);
+
+    const flash = document.createElement("div");
+    flash.id = "fx-screen-flash";
+    document.body.appendChild(flash);
+
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    let w, h, particles = [];
+    let lastLightning = 0;
+    let lastLaser = 0;
+    let lastFlash = 0;
+    let lightningPath = [];
+    let lightningAlpha = 0;
+
+    function resize() {
+        const dpr = Math.min(devicePixelRatio || 1, 2);
+        w = innerWidth;
+        h = innerHeight;
+        canvas.width = w * dpr;
+        canvas.height = h * dpr;
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+
+        particles = Array.from({ length: Math.min(140, Math.floor(w * h / 8000)) }, () => ({
+            x: Math.random() * w,
+            y: Math.random() * h,
+            r: Math.random() * 2 + .4,
+            speed: Math.random() * .8 + .15,
+            drift: (Math.random() - .5) * .5,
+            phase: Math.random() * 6.28
+        }));
+    }
+
+    function createLightning() {
+        let x = Math.random() * w;
+        let y = 0;
+        lightningPath = [{ x, y }];
+
+        while (y < h * (.35 + Math.random() * .5)) {
+            y += Math.random() * 30 + 10;
+            x += (Math.random() - .5) * 90;
+            lightningPath.push({ x, y });
+
+            if (Math.random() > .65) {
+                lightningPath.push({
+                    x: x + (Math.random() - .5) * 100,
+                    y: y + Math.random() * 30
+                });
+                lightningPath.push({ x, y });
+            }
+        }
+
+        lightningAlpha = 1;
+    }
+
+    function spawnLaser() {
+        const laser = document.createElement("div");
+        laser.className = "fx-auto-laser";
+        laser.style.top = Math.random() * 100 + "%";
+        laser.style.transform = `rotate(${Math.random() * 35 - 17}deg)`;
+        document.body.appendChild(laser);
+        setTimeout(() => laser.remove(), 1400);
+    }
+
+    function flashScreen() {
+        flash.style.animation = "none";
+        void flash.offsetWidth;
+        flash.style.animation = "fxAmbientFlash .45s steps(1) forwards";
+    }
+
+    function draw(time = 0) {
+        ctx.clearRect(0, 0, w, h);
+
+        for (const p of particles) {
+            p.y -= p.speed;
+            p.x += p.drift;
+
+            if (p.y < -5) {
+                p.y = h + 5;
+                p.x = Math.random() * w;
+            }
+
+            const alpha = .35 + (Math.sin(time * .002 + p.phase) + 1) * .3;
+            ctx.globalAlpha = alpha;
+            ctx.fillStyle = Math.random() > .5 ? "#00f7ff" : "#bd5bff";
+            ctx.shadowBlur = 14;
+            ctx.shadowColor = ctx.fillStyle;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        if (time - lastLightning > 700 + Math.random() * 1700) {
+            lastLightning = time;
+            createLightning();
+        }
+
+        if (lightningAlpha > .02) {
+            ctx.globalAlpha = lightningAlpha;
+            ctx.beginPath();
+
+            lightningPath.forEach((p, i) => {
+                if (i === 0) ctx.moveTo(p.x, p.y);
+                else ctx.lineTo(p.x, p.y);
+            });
+
+            ctx.strokeStyle = "#ffffff";
+            ctx.lineWidth = 2;
+            ctx.shadowBlur = 25;
+            ctx.shadowColor = "#00ffff";
+            ctx.stroke();
+
+            ctx.strokeStyle = "#bd5bff";
+            ctx.lineWidth = 6;
+            ctx.globalAlpha = lightningAlpha * .25;
+            ctx.stroke();
+
+            lightningAlpha *= .78;
+        }
+
+        ctx.globalAlpha = 1;
+        ctx.shadowBlur = 0;
+
+        if (time - lastLaser > 1800 + Math.random() * 2200) {
+            lastLaser = time;
+            spawnLaser();
+        }
+
+        if (time - lastFlash > 5000 + Math.random() * 7000) {
+            lastFlash = time;
+            if (Math.random() > .45) flashScreen();
+        }
+
+        requestAnimationFrame(draw);
+    }
+
+    resize();
+    window.addEventListener("resize", resize);
+    draw();
+})();
