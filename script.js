@@ -6,6 +6,7 @@ document.querySelectorAll(".card, #nav-drawer").forEach(e => {
 });
 document.querySelectorAll("*").forEach(e => {
     e.style.color = "blue";
+});
 
 // chatGPT
 const s = document.createElement("style");
